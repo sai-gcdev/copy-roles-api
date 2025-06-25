@@ -79,6 +79,13 @@ app.post("/api/copy-roles", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, () => {
+  const isRender = !!process.env.RENDER; // Render sets this automatically
+  if (isRender) {
+    console.log(`Server running on Render Cloud (port ${PORT})`);
+  } else {
+    console.log(`Server running locally at http://localhost:${PORT}`);
+  }
 });
