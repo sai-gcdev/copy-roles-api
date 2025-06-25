@@ -79,6 +79,68 @@ app.post("/api/copy-roles", async (req, res) => {
   }
 });
 
+// POST /api/users - fetch all users from Genesys Cloud (with pagination)
+app.post("/api/users", async (req, res) => {
+  const { credentials } = req.body;
+
+  if (!credentials || !credentials.clientId || !credentials.clientSecret || !credentials.region) {
+    return res.status(400).json({ error: "Missing credentials" });
+  }
+
+  const client = platformClient.ApiClient.instance;
+  client.setEnvironment(platformClient.PureCloudRegionHosts[credentials.region]);
+  const usersApi = new platformClient.UsersApi();
+
+  async function authenticate() {
+    return client
+      .loginClientCredentialsGrant(credentials.clientId, credentials.clientSecret)
+      .then(() => {
+        console.log("Authenticated successfully for /api/users.");
+      })
+      .catch((err) => {
+        console.error("OAuth failed:", err);
+        throw new Error("Authentication failed");
+      });
+  }
+
+  try {
+    await authenticate();
+    let allUsers = [];
+    let pageNumber = 1;
+    const pageSize = 100;
+    let totalPages = 1;
+    do {
+      const opts = {
+        pageSize,
+        pageNumber,
+        state: "active"
+      };
+      const data = await usersApi.getUsers(opts);
+      if (data && data.entities) {
+        allUsers = allUsers.concat(data.entities);
+      }
+      if (data.pageCount) {
+        totalPages = data.pageCount;
+      } else if (data.pageCount === undefined && data.pageSize && data.total) {
+        totalPages = Math.ceil(data.total / data.pageSize);
+      }
+      pageNumber++;
+    } while (pageNumber <= totalPages);
+
+    // Return only relevant user info (id, name, email, etc.)
+    const users = allUsers.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      state: u.state
+    }));
+    return res.status(200).json({ users });
+  } catch (err) {
+    console.error("Error in /api/users:", err);
+    return res.status(500).json({ error: "Internal Server Error", detail: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
